@@ -1,0 +1,112 @@
+import React from 'react';
+import {
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+  Container,
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Box,
+} from '@mui/material';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
+import { useLocalStorage } from './hooks/useLocalStorage';
+import FileUpload from './components/FileUpload';
+import Dashboard from './components/Dashboard';
+import { WorkoutData, SleepData, TransformedHeartRateData } from './types';
+
+// Import chart setup to register components
+import './utils/chartSetup';
+
+function App() {
+  const [darkMode, setDarkMode] = useLocalStorage('darkMode', false);
+  const [data, setData] = React.useState<{
+    workoutData: WorkoutData[];
+    sleepData: SleepData[];
+    heartRateData: TransformedHeartRateData[];
+  }>({
+    workoutData: [],
+    sleepData: [],
+    heartRateData: [],
+  });
+
+  const theme = React.useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? 'dark' : 'light',
+          primary: {
+            main: '#3f51b5',
+          },
+          secondary: {
+            main: '#f50057',
+          },
+        },
+        shape: {
+          borderRadius: 8,
+        },
+        typography: {
+          fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+          h3: {
+            fontWeight: 600,
+          },
+          h6: {
+            fontWeight: 500,
+          },
+        },
+      }),
+    [darkMode]
+  );
+
+  const handleDataLoaded = (newData: {
+    workoutData: WorkoutData[];
+    sleepData: SleepData[];
+    heartRateData: TransformedHeartRateData[];
+  }) => {
+    setData(newData);
+  };
+
+  const handleRefresh = () => {
+    // Clear current data
+    setData({
+      workoutData: [],
+      sleepData: [],
+      heartRateData: [],
+    });
+  };
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AppBar position="static" elevation={1}>
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
+            Fitness Dashboard
+          </Typography>
+          <IconButton
+            onClick={() => setDarkMode(!darkMode)}
+            color="inherit"
+            aria-label="toggle dark mode"
+            size="large"
+          >
+            {darkMode ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+        <Box>
+          <FileUpload onDataLoaded={handleDataLoaded} />
+          <Dashboard
+            workoutData={data.workoutData}
+            sleepData={data.sleepData}
+            heartRateData={data.heartRateData}
+            onRefresh={handleRefresh}
+          />
+        </Box>
+      </Container>
+    </ThemeProvider>
+  );
+}
+
+export default App;

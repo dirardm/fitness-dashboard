@@ -1,0 +1,398 @@
+import React, { useState, useCallback } from 'react';
+import {
+  Paper,
+  Typography,
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import { Fullscreen } from '@mui/icons-material';
+import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { SleepData } from '../types';
+import '../utils/chartSetup';
+import { formatNumber, formatHours, formatBPM } from '../utils/formatters';
+import ChartModal from './ChartModal';
+
+interface SleepAnalysisProps {
+  data: SleepData[];
+  preview?: boolean;
+}
+
+const SleepAnalysis: React.FC<SleepAnalysisProps> = ({ data, preview = false }) => {
+  const [openModal, setOpenModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalChart, setModalChart] = useState<React.ReactNode>(null);
+
+  if (data.length === 0) {
+    return (
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Sleep Analysis
+        </Typography>
+        <Typography color="textSecondary">
+          No sleep data available.
+        </Typography>
+      </Paper>
+    );
+  }
+
+  // Prepare data for charts
+  const chartData = data.map(sleep => ({
+    date: sleep['Night from'],
+    total: sleep['Total sleep time (min)'] / 60, // Convert to hours
+    light: sleep['Light sleep (min)'] / 60,
+    deep: sleep['Deep sleep (min)'] / 60,
+    rem: sleep['REM (min)'] / 60,
+    quality: sleep['avg HR'],
+    hrv: sleep['avg HR Variability'],
+    respiratory: sleep['Respiratory rate'],
+    fragmentation: sleep['Fragmentation'],
+  })).slice(-14); // Last 14 days
+
+  const sleepDurationData = {
+    labels: chartData.map(d => d.date),
+    datasets: [
+      {
+        label: 'Light Sleep (hours)',
+        data: chartData.map(d => d.light),
+        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Deep Sleep (hours)',
+        data: chartData.map(d => d.deep),
+        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'REM Sleep (hours)',
+        data: chartData.map(d => d.rem),
+        backgroundColor: 'rgba(153, 102, 255, 0.5)',
+        borderColor: 'rgba(153, 102, 255, 1)',
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const sleepDurationOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: 'Sleep Duration by Stage (hours)',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            const label = context.dataset.label || '';
+            const value = context.raw || 0;
+            return `${label}: ${value.toFixed(1)} hours`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        stacked: true,
+      },
+      x: {
+        stacked: true,
+      },
+    },
+  };
+
+  const sleepQualityData = {
+    labels: chartData.map(d => d.date),
+    datasets: [
+      {
+        label: 'Average Heart Rate',
+        data: chartData.map(d => d.quality),
+        fill: false,
+        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        borderColor: 'rgba(255, 99, 132, 1)',
+        tension: 0.1,
+      },
+    ],
+  };
+
+  const sleepQualityOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      title: {
+        display: true,
+        text: 'Sleep Quality (Average Heart Rate)',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `Avg HR: ${context.raw.toFixed(0)} BPM`;
+          }
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        min: 0,
+      },
+    },
+  };
+
+  // Sleep stage distribution data - show percentages
+  const totalSleepTime = chartData.reduce((sum, day) => sum + day.total, 0);
+  const sleepStageData = {
+    labels: ['Light Sleep', 'Deep Sleep', 'REM Sleep'],
+    datasets: [
+      {
+        data: [
+          (chartData.reduce((sum, day) => sum + day.light, 0) / totalSleepTime) * 100,
+          (chartData.reduce((sum, day) => sum + day.deep, 0) / totalSleepTime) * 100,
+          (chartData.reduce((sum, day) => sum + day.rem, 0) / totalSleepTime) * 100,
+        ],
+        backgroundColor: [
+          'rgba(54, 162, 235, 0.7)',
+          'rgba(75, 192, 192, 0.7)',
+          'rgba(153, 102, 255, 0.7)',
+        ],
+      },
+    ],
+  };
+
+  const sleepStageOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+      },
+      title: {
+        display: true,
+        text: 'Sleep Stage Distribution (%)',
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            return `${context.label}: ${context.raw.toFixed(1)}%`;
+          }
+        }
+      }
+    },
+  };
+
+  const avgSleep = chartData.reduce((sum, day) => sum + day.total, 0) / chartData.length;
+  const avgDeepSleep = chartData.reduce((sum, day) => sum + day.deep, 0) / chartData.length;
+  const avgRemSleep = chartData.reduce((sum, day) => sum + day.rem, 0) / chartData.length;
+
+  // Function to open chart in modal
+  const openChartModal = useCallback((title: string, chart: React.ReactNode) => {
+    setModalTitle(title);
+    setModalChart(chart);
+    setOpenModal(true);
+  }, []);
+
+  // Function to close modal
+  const closeChartModal = useCallback(() => {
+    setOpenModal(false);
+  }, []);
+
+  // Create chart components with fullscreen buttons
+  const renderChartWithFullscreen = (
+    title: string, 
+    chart: React.ReactNode, 
+    chartComponent: React.ReactNode
+  ) => (
+    <Box sx={{ position: 'relative', height: '100%' }}>
+      {chartComponent}
+      <Tooltip title="Open in full screen">
+        <IconButton
+          sx={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.7)' }}
+          onClick={() => openChartModal(title, chart)}
+          size="small"
+        >
+          <Fullscreen fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+
+  // Create chart components for modal and regular view
+  const sleepDurationChart = (
+    <Bar data={sleepDurationData} options={sleepDurationOptions} />
+  );
+
+  const sleepQualityChart = (
+    <Line data={sleepQualityData} options={sleepQualityOptions} />
+  );
+
+  const sleepStageChart = (
+    <Doughnut data={sleepStageData} options={sleepStageOptions} />
+  );
+
+  return (
+    <>
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Sleep Analysis
+        </Typography>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: preview ? 300 : 400 }}>
+              <CardContent>
+                <Box sx={{ height: preview ? 250 : 350 }}>
+                  {renderChartWithFullscreen(
+                    'Sleep Duration by Stage',
+                    sleepDurationChart,
+                    sleepDurationChart
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: preview ? 300 : 400 }}>
+              <CardContent>
+                <Box sx={{ height: preview ? 250 : 350 }}>
+                  {renderChartWithFullscreen(
+                    'Sleep Quality (Average Heart Rate)',
+                    sleepQualityChart,
+                    sleepQualityChart
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {!preview && (
+            <>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ height: 300 }}>
+                  <CardContent>
+                    <Box sx={{ height: 250 }}>
+                      {renderChartWithFullscreen(
+                        'Sleep Stage Distribution',
+                        sleepStageChart,
+                        sleepStageChart
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary">
+                      {formatNumber(avgSleep)}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Average Sleep Duration (hours)
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary">
+                      {formatNumber(avgDeepSleep)}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Average Deep Sleep (hours)
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary">
+                      {formatNumber(avgRemSleep)}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Average REM Sleep (hours)
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Sleep Metrics Overview
+                    </Typography>
+                    <TableContainer sx={{ maxHeight: 400 }}>
+                      <Table stickyHeader size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Total Sleep (hrs)</TableCell>
+                            <TableCell>Light Sleep (hrs)</TableCell>
+                            <TableCell>Deep Sleep (hrs)</TableCell>
+                            <TableCell>REM Sleep (hrs)</TableCell>
+                            <TableCell>Avg HR (BPM)</TableCell>
+                            <TableCell>HRV</TableCell>
+                            <TableCell>Respiratory Rate</TableCell>
+                            <TableCell>Fragmentation</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {data.slice(-10).map((sleep, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{sleep['Night from']}</TableCell>
+                              <TableCell>{formatHours(sleep['Total sleep time (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(sleep['Light sleep (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(sleep['Deep sleep (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(sleep['REM (min)'] / 60)}</TableCell>
+                              <TableCell>{formatBPM(sleep['avg HR'])}</TableCell>
+                              <TableCell>{formatNumber(sleep['avg HR Variability'])}</TableCell>
+                              <TableCell>{formatNumber(sleep['Respiratory rate'])}</TableCell>
+                              <TableCell>{formatNumber(sleep['Fragmentation'])}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          )}
+        </Grid>
+      </Paper>
+
+      <ChartModal
+        open={openModal}
+        onClose={closeChartModal}
+        title={modalTitle}
+        chartComponent={modalChart}
+      />
+    </>
+  );
+};
+
+export default SleepAnalysis;
