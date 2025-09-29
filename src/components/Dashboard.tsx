@@ -11,6 +11,7 @@ import {
   useMediaQuery,
   IconButton,
   Fade,
+  Tooltip,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -20,6 +21,8 @@ import {
   ShowChart as AnalyticsIcon,
   Refresh as RefreshIcon,
   CloudUpload as UploadIcon,
+  Brightness4 as DarkIcon,
+  Brightness7 as LightIcon,
 } from '@mui/icons-material';
 import SummaryView from './SummaryView';
 import WorkoutAnalysis from './WorkoutAnalysis';
@@ -41,6 +44,8 @@ interface DashboardProps {
     heartRateData: TransformedHeartRateData[];
   }) => void;
   onRefresh: () => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
 interface TabPanelProps {
@@ -65,7 +70,12 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded, onRefresh }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+  onDataLoaded, 
+  onRefresh, 
+  darkMode, 
+  onToggleDarkMode 
+}) => {
   const [tabValue, setTabValue] = useState(0);
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null]);
   const [workoutData, setWorkoutData] = useState<WorkoutData[]>([]);
@@ -156,17 +166,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded, onRefresh }) => {
                   <Typography variant="h3" component="h1" fontWeight="600">
                     Fitness Analytics Dashboard
                   </Typography>
-                  <IconButton onClick={handleRefresh} color="primary" size="large">
-                    <RefreshIcon />
-                  </IconButton>
-                  <IconButton 
-                    onClick={() => setShowUpload(true)} 
-                    color="secondary" 
-                    size="large"
-                    title="Upload new data"
-                  >
-                    <UploadIcon />
-                  </IconButton>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Tooltip title="Refresh Data">
+                      <IconButton onClick={handleRefresh} color="primary" size="large">
+                        <RefreshIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Upload New Data">
+                      <IconButton 
+                        onClick={() => setShowUpload(true)} 
+                        color="secondary" 
+                        size="large"
+                      >
+                        <UploadIcon />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                      <IconButton 
+                        onClick={onToggleDarkMode} 
+                        color="inherit" 
+                        size="large"
+                        sx={{
+                          color: darkMode ? 'warning.main' : 'text.primary',
+                          '&:hover': {
+                            backgroundColor: darkMode ? 'rgba(255, 167, 38, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                          }
+                        }}
+                      >
+                        {darkMode ? <LightIcon /> : <DarkIcon />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </Box>
                 <Typography variant="h6" color="textSecondary">
                   Comprehensive analysis of workout, sleep, and heart rate data
@@ -183,7 +213,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onDataLoaded, onRefresh }) => {
             />
 
             {/* Tabbed Navigation */}
-            <Paper sx={{ width: '100%', mt: 4, borderRadius: 2, overflow: 'hidden' }}>
+            <Paper 
+              sx={{ 
+                width: '100%', 
+                mt: 4, 
+                borderRadius: 2, 
+                overflow: 'hidden',
+                backgroundColor: theme.palette.background.paper,
+              }}
+            >
               <Tabs
                 value={tabValue}
                 onChange={handleTabChange}
