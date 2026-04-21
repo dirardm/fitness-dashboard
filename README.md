@@ -173,9 +173,9 @@ Missing cells (no data for a given time slot on a given date) are handled gracef
 ---
 
 ## Screenshots
-
 <video width="100%" controls>
   <source src="Fitness-Analytics.mp4" type="video/mp4">
+  Your browser does not support the video tag.
 </video>
 
 > Coming soon: screenshots will be added here. The sections below show suggested captions.\_
