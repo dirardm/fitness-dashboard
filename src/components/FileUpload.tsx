@@ -1,178 +1,352 @@
-import React from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
   Box,
-  Button,
-  Paper,
   Typography,
-  Alert,
   Chip,
-  Stack,
   IconButton,
-  Collapse,
+  LinearProgress,
+  Alert,
+  useTheme,
 } from '@mui/material';
 import {
-  CloudUpload as CloudUploadIcon,
-  Close as CloseIcon,
+  FitnessCenter as WorkoutIcon,
+  Bedtime as SleepIcon,
+  Favorite as HeartIcon,
+  CheckCircle as CheckIcon,
+  Cancel as CancelIcon,
+  UploadFile as UploadFileIcon,
 } from '@mui/icons-material';
 import { parseCSV, parseHeartRateCSV, transformHeartRateData } from '../utils/csvParser';
-import { WorkoutData, SleepData, HeartRateData, TransformedHeartRateData } from '../types';
+import { WorkoutData, SleepData } from '../types';
+import { useData } from '../context/DataContext';
+import { mocha } from '../theme';
 
-interface FileUploadProps {
-  onDataLoaded: (data: {
-    workoutData: WorkoutData[];
-    sleepData: SleepData[];
-    heartRateData: TransformedHeartRateData[];
-  }) => void;
+type FileType = 'workout' | 'sleep' | 'heartRate';
+
+interface ZoneConfig {
+  key: FileType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onDataLoaded }) => {
-  const [workoutFile, setWorkoutFile] = React.useState<File | null>(null);
-  const [sleepFile, setSleepFile] = React.useState<File | null>(null);
-  const [heartRateFile, setHeartRateFile] = React.useState<File | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [showUpload, setShowUpload] = React.useState(true);
+const ZONES: ZoneConfig[] = [
+  {
+    key: 'workout',
+    label: 'Workout Data',
+    description: 'CSV export from Polar, Garmin or similar',
+    icon: <WorkoutIcon />,
+    color: mocha.blue,
+  },
+  {
+    key: 'sleep',
+    label: 'Sleep Data',
+    description: 'Sleep log with stages, HR and HRV',
+    icon: <SleepIcon />,
+    color: mocha.mauve,
+  },
+  {
+    key: 'heartRate',
+    label: 'Heart Rate Data',
+    description: 'Transposed CSV: first column = time, header = dates',
+    icon: <HeartIcon />,
+    color: mocha.red,
+  },
+];
 
-  const handleFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    setFile: React.Dispatch<React.SetStateAction<File | null>>
-  ) => {
-    if (event.target.files && event.target.files[0]) {
-      setFile(event.target.files[0]);
-      setError(null);
-    }
+interface ZoneState {
+  file: File | null;
+  count: number;
+  error: string | null;
+  loading: boolean;
+}
+
+const initial = (): ZoneState => ({ file: null, count: 0, error: null, loading: false });
+
+const FileUpload: React.FC = () => {
+  const theme = useTheme();
+  const dark = theme.palette.mode === 'dark';
+  const { setWorkoutData, setSleepData, setHeartRateData } = useData();
+
+  const [zones, setZones] = useState<Record<FileType, ZoneState>>({
+    workout: initial(),
+    sleep: initial(),
+    heartRate: initial(),
+  });
+  const [draggingOver, setDraggingOver] = useState<FileType | null>(null);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
+  const inputRefs = {
+    workout: useRef<HTMLInputElement>(null),
+    sleep: useRef<HTMLInputElement>(null),
+    heartRate: useRef<HTMLInputElement>(null),
   };
 
-  const handleUpload = async () => {
-    if (!workoutFile || !sleepFile || !heartRateFile) {
-      setError('Please upload all three files');
-      return;
-    }
+  const setZone = useCallback((key: FileType, patch: Partial<ZoneState>) => {
+    setZones(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  }, []);
 
-    setIsLoading(true);
-    setError(null);
+  const processFile = useCallback(
+    async (key: FileType, file: File) => {
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        setZone(key, { error: 'Please upload a CSV file.', file: null });
+        return;
+      }
 
-    try {
-      const workoutData = await parseCSV<WorkoutData>(workoutFile);
-      const sleepData = await parseCSV<SleepData>(sleepFile);
-      const heartRateRawData = await parseHeartRateCSV(heartRateFile);
-      const heartRateData = transformHeartRateData(heartRateRawData);
+      setZone(key, { file, loading: true, error: null });
+      setGlobalError(null);
 
-      onDataLoaded({
-        workoutData,
-        sleepData,
-        heartRateData,
-      });
+      try {
+        if (key === 'workout') {
+          const data = await parseCSV<WorkoutData>(file);
+          setWorkoutData(data);
+          setZone(key, { loading: false, count: data.length });
+        } else if (key === 'sleep') {
+          const data = await parseCSV<SleepData>(file);
+          setSleepData(data);
+          setZone(key, { loading: false, count: data.length });
+        } else {
+          const raw = await parseHeartRateCSV(file);
+          const data = transformHeartRateData(raw as Record<string, unknown>[]);
+          setHeartRateData(data);
+          const dates = new Set(data.map((d: { date: string }) => d.date)).size;
+          setZone(key, { loading: false, count: dates });
+        }
+      } catch (err) {
+        console.error(err);
+        setZone(key, { loading: false, file: null, count: 0, error: 'Could not parse file — check format.' });
+      }
+    },
+    [setWorkoutData, setSleepData, setHeartRateData, setZone]
+  );
 
-      // Clear file selections after successful upload
-      setWorkoutFile(null);
-      setSleepFile(null);
-      setHeartRateFile(null);
-      
-    } catch (err) {
-      setError('Error parsing CSV files. Please check the file formats.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const removeFile = useCallback(
+    (key: FileType) => {
+      setZone(key, initial());
+      if (key === 'workout') setWorkoutData([]);
+      else if (key === 'sleep') setSleepData([]);
+      else setHeartRateData([]);
+    },
+    [setWorkoutData, setSleepData, setHeartRateData, setZone]
+  );
 
-  const handleClose = () => {
-    setShowUpload(false);
-  };
+  const handleDrop = useCallback(
+    (e: React.DragEvent, key: FileType) => {
+      e.preventDefault();
+      setDraggingOver(null);
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(key, file);
+    },
+    [processFile]
+  );
 
-  if (!showUpload) {
-    return null;
-  }
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>, key: FileType) => {
+      const file = e.target.files?.[0];
+      if (file) processFile(key, file);
+      e.target.value = '';
+    },
+    [processFile]
+  );
+
+  const loadedCount = Object.values(zones).filter(z => z.file && !z.loading && !z.error).length;
+  const isAnyLoading = Object.values(zones).some(z => z.loading);
+
+  const borderColor = dark ? 'rgba(108,112,134,0.25)' : 'rgba(109,40,217,0.12)';
 
   return (
-    <Paper sx={{ p: 3, mb: 3, position: 'relative' }}>
-      <IconButton
-        sx={{ position: 'absolute', top: 8, right: 8 }}
-        onClick={handleClose}
-        size="small"
-      >
-        <CloseIcon />
-      </IconButton>
-      
-      <Typography variant="h6" gutterBottom>
-        Upload Data Files
-      </Typography>
-      
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+    <Box>
+      {/* Header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography
+          variant="h4"
+          sx={{
+            fontWeight: 700,
+            color: dark ? mocha.mauve : '#7c3aed',
+            letterSpacing: '-0.03em',
+            mb: 0.5,
+          }}
+        >
+          Upload Your Data
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Upload all three CSV files to unlock your full fitness dashboard.
+        </Typography>
+      </Box>
+
+      {globalError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setGlobalError(null)}>
+          {globalError}
         </Alert>
       )}
-      
-      <Stack spacing={2}>
-        <Box>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<CloudUploadIcon />}
-            sx={{ mr: 2 }}
-            disabled={isLoading}
-          >
-            Upload Workout Data
-            <input
-              type="file"
-              hidden
-              accept=".csv"
-              onChange={(e) => handleFileChange(e, setWorkoutFile)}
-            />
-          </Button>
-          {workoutFile && <Chip label={workoutFile.name} onDelete={() => setWorkoutFile(null)} />}
-        </Box>
-        
-        <Box>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<CloudUploadIcon />}
-            sx={{ mr: 2 }}
-            disabled={isLoading}
-          >
-            Upload Sleep Data
-            <input
-              type="file"
-              hidden
-              accept=".csv"
-              onChange={(e) => handleFileChange(e, setSleepFile)}
-            />
-          </Button>
-          {sleepFile && <Chip label={sleepFile.name} onDelete={() => setSleepFile(null)} />}
-        </Box>
-        
-        <Box>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<CloudUploadIcon />}
-            sx={{ mr: 2 }}
-            disabled={isLoading}
-          >
-            Upload Heart Rate Data
-            <input
-              type="file"
-              hidden
-              accept=".csv"
-              onChange={(e) => handleFileChange(e, setHeartRateFile)}
-            />
-          </Button>
-          {heartRateFile && <Chip label={heartRateFile.name} onDelete={() => setHeartRateFile(null)} />}
-        </Box>
-        
-        <Button
-          variant="contained"
-          onClick={handleUpload}
-          disabled={!workoutFile || !sleepFile || !heartRateFile || isLoading}
-          sx={{ mt: 2 }}
-        >
-          {isLoading ? 'Processing...' : 'Process Data'}
-        </Button>
-      </Stack>
-    </Paper>
+
+      {/* Upload zones */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        {ZONES.map(zone => {
+          const state = zones[zone.key];
+          const isDragging = draggingOver === zone.key;
+          const isLoaded = !!state.file && !state.loading && !state.error;
+
+          return (
+            <Box
+              key={zone.key}
+              onClick={() => !isLoaded && inputRefs[zone.key].current?.click()}
+              onDragOver={e => { e.preventDefault(); setDraggingOver(zone.key); }}
+              onDragLeave={() => setDraggingOver(null)}
+              onDrop={e => handleDrop(e, zone.key)}
+              sx={{
+                position: 'relative',
+                border: `2px ${isLoaded ? 'solid' : 'dashed'} ${
+                  isLoaded
+                    ? zone.color
+                    : isDragging
+                    ? `${zone.color}88`
+                    : borderColor
+                }`,
+                borderRadius: 3,
+                p: 3,
+                cursor: isLoaded ? 'default' : 'pointer',
+                transition: 'all 0.2s ease',
+                bgcolor: isLoaded
+                  ? `${zone.color}12`
+                  : isDragging
+                  ? `${zone.color}08`
+                  : dark
+                  ? mocha.surface0
+                  : '#ffffff',
+                '&:hover': isLoaded
+                  ? {}
+                  : {
+                      borderColor: zone.color,
+                      bgcolor: `${zone.color}08`,
+                    },
+                minHeight: 160,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                gap: 1,
+              }}
+            >
+              {state.loading ? (
+                <>
+                  <Box sx={{ color: zone.color, opacity: 0.7 }}>{zone.icon}</Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Parsing…
+                  </Typography>
+                  <LinearProgress sx={{ width: '80%', mt: 1 }} />
+                </>
+              ) : isLoaded ? (
+                <>
+                  <CheckIcon sx={{ color: zone.color, fontSize: 32 }} />
+                  <Typography sx={{ fontWeight: 600 }} variant="body2">
+                    {zone.label}
+                  </Typography>
+                  <Chip
+                    label={state.file!.name}
+                    size="small"
+                    sx={{
+                      maxWidth: '100%',
+                      bgcolor: `${zone.color}22`,
+                      color: zone.color,
+                      border: `1px solid ${zone.color}44`,
+                      fontSize: '0.7rem',
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {state.count} {zone.key === 'heartRate' ? 'workout days' : 'records'}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={e => { e.stopPropagation(); removeFile(zone.key); }}
+                    sx={{ position: 'absolute', top: 8, right: 8, color: 'text.secondary' }}
+                  >
+                    <CancelIcon fontSize="small" />
+                  </IconButton>
+                </>
+              ) : state.error ? (
+                <>
+                  <Box sx={{ color: mocha.red }}>{zone.icon}</Box>
+                  <Typography sx={{ fontWeight: 600 }} variant="body2" color="error">
+                    {zone.label}
+                  </Typography>
+                  <Typography variant="caption" color="error">
+                    {state.error}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Click to try again
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Box sx={{ color: zone.color, fontSize: 36 }}>
+                    <UploadFileIcon sx={{ fontSize: 'inherit' }} />
+                  </Box>
+                  <Typography sx={{ fontWeight: 600 }} variant="body2">
+                    {zone.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {zone.description}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: zone.color,
+                      border: `1px solid ${zone.color}44`,
+                      borderRadius: 1,
+                      px: 1,
+                      py: 0.25,
+                      mt: 0.5,
+                      fontSize: '0.7rem',
+                    }}
+                  >
+                    Drop CSV or click to browse
+                  </Typography>
+                </>
+              )}
+
+              <input
+                ref={inputRefs[zone.key]}
+                type="file"
+                accept=".csv"
+                hidden
+                onChange={e => handleFileInput(e, zone.key)}
+              />
+            </Box>
+          );
+        })}
+      </Box>
+
+      {/* Progress indicator */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <LinearProgress
+          variant="determinate"
+          value={(loadedCount / 3) * 100}
+          sx={{
+            flex: 1,
+            height: 4,
+            borderRadius: 2,
+            bgcolor: dark ? mocha.surface1 : 'rgba(109,40,217,0.08)',
+            '& .MuiLinearProgress-bar': {
+              bgcolor: dark ? mocha.mauve : '#7c3aed',
+              borderRadius: 2,
+            },
+          }}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+          {isAnyLoading ? 'Parsing…' : `${loadedCount} / 3 files ready`}
+        </Typography>
+      </Box>
+    </Box>
   );
 };
 

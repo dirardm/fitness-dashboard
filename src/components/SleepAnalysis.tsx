@@ -14,6 +14,7 @@ import {
   TableRow,
   IconButton,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import { Fullscreen } from '@mui/icons-material';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
@@ -21,6 +22,7 @@ import { SleepData } from '../types';
 import '../utils/chartSetup';
 import { formatNumber, formatHours, formatBPM } from '../utils/formatters';
 import ChartModal from './ChartModal';
+import { mocha, getChartGrid, getChartText, getChartTooltipBg } from '../theme';
 
 interface SleepAnalysisProps {
   data: SleepData[];
@@ -28,404 +30,228 @@ interface SleepAnalysisProps {
 }
 
 const SleepAnalysis: React.FC<SleepAnalysisProps> = ({ data, preview = false }) => {
+  const theme = useTheme();
+  const dark = theme.palette.mode === 'dark';
   const [openModal, setOpenModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalChart, setModalChart] = useState<React.ReactNode>(null);
 
+  const openChartModal = useCallback((title: string, chart: React.ReactNode) => {
+    setModalTitle(title); setModalChart(chart); setOpenModal(true);
+  }, []);
+  const closeChartModal = useCallback(() => setOpenModal(false), []);
+
+  const gridColor = getChartGrid(dark);
+  const textColor = getChartText(dark);
+  const tooltipBg = getChartTooltipBg(dark);
+
   if (data.length === 0) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Sleep Analysis
-        </Typography>
-        <Typography color="textSecondary">
-          No sleep data available.
-        </Typography>
+      <Paper sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Sleep Analysis</Typography>
+        <Typography color="text.secondary" variant="body2">No sleep data in the selected range.</Typography>
       </Paper>
     );
   }
 
-  // Prepare data for charts
-  const chartData = data.map(sleep => ({
-    date: sleep['Night from'],
-    total: sleep['Total sleep time (min)'] / 60, // Convert to hours
-    light: sleep['Light sleep (min)'] / 60,
-    deep: sleep['Deep sleep (min)'] / 60,
-    rem: sleep['REM (min)'] / 60,
-    quality: sleep['avg HR'],
-    hrv: sleep['avg HR Variability'],
-    respiratory: sleep['Respiratory rate'],
-    fragmentation: sleep['Fragmentation'],
-  })).slice(-14); // Last 14 days
+  const chartData = data.map(s => ({
+    date: s['Night from'],
+    total: s['Total sleep time (min)'] / 60,
+    light: s['Light sleep (min)'] / 60,
+    deep: s['Deep sleep (min)'] / 60,
+    rem: s['REM (min)'] / 60,
+    quality: s['avg HR'],
+    hrv: s['avg HR Variability'],
+    respiratory: s['Respiratory rate'],
+    fragmentation: s['Fragmentation'],
+  })).slice(-14);
 
-  const sleepDurationData = {
+  const lightC = dark ? mocha.blue : '#3b82f6';
+  const deepC  = dark ? mocha.teal : '#0d9488';
+  const remC   = dark ? mocha.mauve : '#7c3aed';
+  const qualC  = dark ? mocha.green : '#10b981';
+
+  const tooltipBase = {
+    backgroundColor: tooltipBg,
+    titleColor: dark ? mocha.text : '#1e1b4b',
+    bodyColor: dark ? mocha.subtext0 : '#6b7280',
+    borderColor: dark ? mocha.surface1 : '#e5e7eb',
+    borderWidth: 1,
+  };
+
+  const durationData = {
     labels: chartData.map(d => d.date),
     datasets: [
-      {
-        label: 'Light Sleep (hours)',
-        data: chartData.map(d => d.light),
-        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-        borderColor: 'rgba(54, 162, 235, 1)',
-        borderWidth: 1,
-      },
-      {
-        label: 'Deep Sleep (hours)',
-        data: chartData.map(d => d.deep),
-        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-      },
-      {
-        label: 'REM Sleep (hours)',
-        data: chartData.map(d => d.rem),
-        backgroundColor: 'rgba(153, 102, 255, 0.5)',
-        borderColor: 'rgba(153, 102, 255, 1)',
-        borderWidth: 1,
-      },
+      { label: 'Light (hrs)', data: chartData.map(d => d.light), backgroundColor: `${lightC}99`, borderColor: lightC, borderWidth: 1 },
+      { label: 'Deep (hrs)',  data: chartData.map(d => d.deep),  backgroundColor: `${deepC}99`,  borderColor: deepC,  borderWidth: 1 },
+      { label: 'REM (hrs)',   data: chartData.map(d => d.rem),   backgroundColor: `${remC}99`,   borderColor: remC,   borderWidth: 1 },
     ],
   };
-
-  const sleepDurationOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
+  const durationOptions = {
+    responsive: true, maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-      title: {
-        display: true,
-        text: 'Sleep Duration by Stage (hours)',
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context: any) {
-            const label = context.dataset.label || '';
-            const value = context.raw || 0;
-            return `${label}: ${value.toFixed(1)} hours`;
-          }
-        }
-      }
+      legend: { position: 'top' as const, labels: { color: textColor, font: { size: 12 } } },
+      title: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (ctx: any) => `${ctx.dataset.label}: ${(ctx.raw as number).toFixed(1)} hrs` } },
     },
     scales: {
-      y: {
-        beginAtZero: true,
-        stacked: true,
-      },
-      x: {
-        stacked: true,
-      },
+      y: { beginAtZero: true, stacked: true, grid: { color: gridColor }, ticks: { color: textColor } },
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: textColor, maxRotation: 45 } },
     },
   };
 
-  const sleepQualityData = {
+  const qualityData = {
     labels: chartData.map(d => d.date),
-    datasets: [
-      {
-        label: 'Average Heart Rate',
-        data: chartData.map(d => d.quality),
-        fill: true,
-        backgroundColor: 'rgba(255, 99, 132, 0.1)',
-        borderColor: 'rgba(255, 99, 132, 1)',
-        borderWidth: 2,
-        pointBackgroundColor: 'rgba(255, 99, 132, 1)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgba(255, 99, 132, 1)',
-        pointRadius: 4,
-        pointHoverRadius: 6,
-        tension: 0.4, // Smooth line
-      },
-    ],
+    datasets: [{
+      label: 'Avg Resting HR',
+      data: chartData.map(d => d.quality),
+      fill: true,
+      backgroundColor: `${qualC}18`,
+      borderColor: qualC,
+      borderWidth: 2,
+      pointBackgroundColor: qualC,
+      pointBorderColor: dark ? mocha.surface0 : '#fff',
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      tension: 0.4,
+    }],
   };
-
-  const sleepQualityOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
+  const qualityOptions = {
+    responsive: true, maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-      title: {
-        display: true,
-        text: 'Sleep Quality (Average Heart Rate)',
-        font: {
-          size: 16,
-          weight: 'bold',
-        },
-      },
-      tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        titleFont: {
-          size: 14,
-        },
-        bodyFont: {
-          size: 14,
-        },
-        padding: 10,
-        callbacks: {
-          label: function(context: any) {
-            return `Avg HR: ${context.raw.toFixed(0)} BPM`;
-          }
-        }
-      }
+      legend: { position: 'top' as const, labels: { color: textColor, font: { size: 12 } } },
+      title: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (ctx: any) => `Avg HR: ${(ctx.raw as number).toFixed(0)} BPM` } },
     },
     scales: {
-      y: {
-        beginAtZero: true,
-        //min: Math.min(...chartData.map(d => d.quality)) - 5,
-        grid: {
-          color: 'rgba(0, 0, 0, 0.1)',
-        },
-        ticks: {
-          font: {
-            size: 12,
-          },
-        },
-        title: {
-          display: true,
-          text: 'Heart Rate (BPM)',
-          font: {
-            size: 14,
-            weight: 'bold',
-          },
-        },
-      },
-      x: {
-        grid: {
-          color: 'rgba(0, 0, 0, 0.1)',
-        },
-        ticks: {
-          font: {
-            size: 12,
-          },
-          maxRotation: 45,
-        },
-        title: {
-          display: true,
-          text: 'Date',
-          font: {
-            size: 14,
-            weight: 'bold',
-          },
-        },
-      },
+      y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor }, title: { display: true, text: 'BPM', color: textColor } },
+      x: { grid: { color: gridColor }, ticks: { color: textColor, maxRotation: 45 } },
     },
   };
 
-  // Sleep stage distribution data - show percentages
-  const totalSleepTime = chartData.reduce((sum, day) => sum + day.total, 0);
-  const sleepStageData = {
-    labels: ['Light Sleep', 'Deep Sleep', 'REM Sleep'],
-    datasets: [
-      {
-        data: [
-          (chartData.reduce((sum, day) => sum + day.light, 0) / totalSleepTime) * 100,
-          (chartData.reduce((sum, day) => sum + day.deep, 0) / totalSleepTime) * 100,
-          (chartData.reduce((sum, day) => sum + day.rem, 0) / totalSleepTime) * 100,
-        ],
-        backgroundColor: [
-          'rgba(54, 162, 235, 0.7)',
-          'rgba(75, 192, 192, 0.7)',
-          'rgba(153, 102, 255, 0.7)',
-        ],
-      },
-    ],
+  const totalSleep = chartData.reduce((s, d) => s + d.total, 0);
+  const stageData = {
+    labels: ['Light', 'Deep', 'REM'],
+    datasets: [{
+      data: [
+        (chartData.reduce((s, d) => s + d.light, 0) / totalSleep) * 100,
+        (chartData.reduce((s, d) => s + d.deep, 0) / totalSleep) * 100,
+        (chartData.reduce((s, d) => s + d.rem, 0) / totalSleep) * 100,
+      ],
+      backgroundColor: [`${lightC}cc`, `${deepC}cc`, `${remC}cc`],
+      borderColor: [lightC, deepC, remC],
+      borderWidth: 1,
+    }],
   };
-
-  const sleepStageOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
+  const stageOptions = {
+    responsive: true, maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'bottom' as const,
-      },
-      title: {
-        display: true,
-        text: 'Sleep Stage Distribution (%)',
-      },
-      tooltip: {
-        callbacks: {
-          label: function(context: any) {
-            return `${context.label}: ${context.raw.toFixed(1)}%`;
-          }
-        }
-      }
+      legend: { position: 'bottom' as const, labels: { color: textColor, font: { size: 12 } } },
+      title: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (ctx: any) => `${ctx.label}: ${(ctx.raw as number).toFixed(1)}%` } },
     },
   };
 
-  const avgSleep = chartData.reduce((sum, day) => sum + day.total, 0) / chartData.length;
-  const avgDeepSleep = chartData.reduce((sum, day) => sum + day.deep, 0) / chartData.length;
-  const avgRemSleep = chartData.reduce((sum, day) => sum + day.rem, 0) / chartData.length;
+  const avgSleep = chartData.reduce((s, d) => s + d.total, 0) / chartData.length;
+  const avgDeep  = chartData.reduce((s, d) => s + d.deep, 0)  / chartData.length;
+  const avgRem   = chartData.reduce((s, d) => s + d.rem, 0)   / chartData.length;
 
-  // Function to open chart in modal
-  const openChartModal = useCallback((title: string, chart: React.ReactNode) => {
-    setModalTitle(title);
-    setModalChart(chart);
-    setOpenModal(true);
-  }, []);
+  const fsBtnSx = {
+    position: 'absolute' as const, top: 8, right: 8,
+    bgcolor: dark ? 'rgba(49,50,68,0.85)' : 'rgba(255,255,255,0.85)',
+    backdropFilter: 'blur(4px)',
+    '&:hover': { bgcolor: dark ? mocha.surface1 : '#f3f4f6' },
+  };
 
-  // Function to close modal
-  const closeChartModal = useCallback(() => {
-    setOpenModal(false);
-  }, []);
-
-  // Create chart components with fullscreen buttons
-  const renderChartWithFullscreen = (
-    title: string, 
-    chart: React.ReactNode, 
-    chartComponent: React.ReactNode
-  ) => (
+  const withFS = (title: string, chart: React.ReactNode) => (
     <Box sx={{ position: 'relative', height: '100%' }}>
-      {chartComponent}
-      <Tooltip title="Open in full screen">
-        <IconButton
-          sx={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.7)' }}
-          onClick={() => openChartModal(title, chart)}
-          size="small"
-        >
+      {chart}
+      <Tooltip title="Fullscreen">
+        <IconButton sx={fsBtnSx} onClick={() => openChartModal(title, chart)} size="small">
           <Fullscreen fontSize="small" />
         </IconButton>
       </Tooltip>
     </Box>
   );
 
-  // Create chart components for modal and regular view
-  const sleepDurationChart = (
-    <Bar data={sleepDurationData} options={sleepDurationOptions} />
-  );
-
-  const sleepQualityChart = (
-    <Line data={sleepQualityData} options={sleepQualityOptions} />
-  );
-
-  const sleepStageChart = (
-    <Doughnut data={sleepStageData} options={sleepStageOptions} />
-  );
+  const durationChart = <Bar data={durationData} options={durationOptions} />;
+  const qualityChart  = <Line data={qualityData} options={qualityOptions} />;
+  const stageChart    = <Doughnut data={stageData} options={stageOptions} />;
 
   return (
     <>
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Sleep Analysis
-        </Typography>
-
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Sleep Analysis</Typography>
+        <Grid container spacing={2.5}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ height: preview ? 300 : 400 }}>
               <CardContent>
-                <Box sx={{ height: preview ? 250 : 350 }}>
-                  {renderChartWithFullscreen(
-                    'Sleep Duration by Stage',
-                    sleepDurationChart,
-                    sleepDurationChart
-                  )}
-                </Box>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Duration by Stage</Typography>
+                <Box sx={{ height: preview ? 230 : 330 }}>{withFS('Sleep Duration', durationChart)}</Box>
               </CardContent>
             </Card>
           </Grid>
-
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ height: preview ? 300 : 400 }}>
               <CardContent>
-                <Box sx={{ height: preview ? 250 : 350 }}>
-                  {renderChartWithFullscreen(
-                    'Sleep Quality (Average Heart Rate)',
-                    sleepQualityChart,
-                    sleepQualityChart
-                  )}
-                </Box>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Resting Heart Rate</Typography>
+                <Box sx={{ height: preview ? 230 : 330 }}>{withFS('Sleep Quality (Resting HR)', qualityChart)}</Box>
               </CardContent>
             </Card>
           </Grid>
 
           {!preview && (
             <>
-              <Grid item xs={12} md={4}>
+              <Grid size={{ xs: 12, md: 4 }}>
                 <Card sx={{ height: 300 }}>
                   <CardContent>
-                    <Box sx={{ height: 250 }}>
-                      {renderChartWithFullscreen(
-                        'Sleep Stage Distribution',
-                        sleepStageChart,
-                        sleepStageChart
-                      )}
-                    </Box>
+                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>Stage Distribution</Typography>
+                    <Box sx={{ height: 230 }}>{withFS('Sleep Stage Distribution', stageChart)}</Box>
                   </CardContent>
                 </Card>
               </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Card>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" color="primary">
-                      {formatNumber(avgSleep)}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Average Sleep Duration (hours)
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Card>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" color="primary">
-                      {formatNumber(avgDeepSleep)}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Average Deep Sleep (hours)
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12} md={4}>
-                <Card>
-                  <CardContent sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" color="primary">
-                      {formatNumber(avgRemSleep)}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Average REM Sleep (hours)
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              <Grid item xs={12}>
+              {[
+                { label: 'Avg Sleep Duration', value: formatNumber(avgSleep), unit: 'hrs', color: remC },
+                { label: 'Avg Deep Sleep',     value: formatNumber(avgDeep),  unit: 'hrs', color: deepC },
+                { label: 'Avg REM Sleep',      value: formatNumber(avgRem),   unit: 'hrs', color: lightC },
+              ].map(stat => (
+                <Grid size={{ xs: 12, md: 4 }} key={stat.label}>
+                  <Card>
+                    <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                      <Typography variant="h3" sx={{ fontWeight: 700, color: stat.color, letterSpacing: '-0.04em' }}>
+                        {stat.value}
+                        <Typography component="span" variant="h6" sx={{ ml: 0.5, color: 'text.secondary' }}>{stat.unit}</Typography>
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{stat.label}</Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+              <Grid size={12}>
                 <Card>
                   <CardContent>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Sleep Metrics Overview
-                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Sleep Metrics Overview</Typography>
                     <TableContainer sx={{ maxHeight: 400 }}>
                       <Table stickyHeader size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Total Sleep (hrs)</TableCell>
-                            <TableCell>Light Sleep (hrs)</TableCell>
-                            <TableCell>Deep Sleep (hrs)</TableCell>
-                            <TableCell>REM Sleep (hrs)</TableCell>
-                            <TableCell>Avg HR (BPM)</TableCell>
-                            <TableCell>HRV</TableCell>
-                            <TableCell>Respiratory Rate</TableCell>
-                            <TableCell>Fragmentation</TableCell>
+                            {['Date','Total (hrs)','Light (hrs)','Deep (hrs)','REM (hrs)','Avg HR','HRV','Resp Rate','Fragmentation'].map(h => (
+                              <TableCell key={h}>{h}</TableCell>
+                            ))}
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {data.slice(-10).map((sleep, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{sleep['Night from']}</TableCell>
-                              <TableCell>{formatHours(sleep['Total sleep time (min)'] / 60)}</TableCell>
-                              <TableCell>{formatHours(sleep['Light sleep (min)'] / 60)}</TableCell>
-                              <TableCell>{formatHours(sleep['Deep sleep (min)'] / 60)}</TableCell>
-                              <TableCell>{formatHours(sleep['REM (min)'] / 60)}</TableCell>
-                              <TableCell>{formatBPM(sleep['avg HR'])}</TableCell>
-                              <TableCell>{formatNumber(sleep['avg HR Variability'])}</TableCell>
-                              <TableCell>{formatNumber(sleep['Respiratory rate'])}</TableCell>
-                              <TableCell>{formatNumber(sleep['Fragmentation'])}</TableCell>
+                          {data.slice(-10).map((s, i) => (
+                            <TableRow key={i} sx={{ '&:hover': { bgcolor: dark ? 'rgba(203,166,247,0.06)' : 'rgba(124,58,237,0.04)' } }}>
+                              <TableCell>{s['Night from']}</TableCell>
+                              <TableCell>{formatHours(s['Total sleep time (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(s['Light sleep (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(s['Deep sleep (min)'] / 60)}</TableCell>
+                              <TableCell>{formatHours(s['REM (min)'] / 60)}</TableCell>
+                              <TableCell>{formatBPM(s['avg HR'])}</TableCell>
+                              <TableCell>{formatNumber(s['avg HR Variability'])}</TableCell>
+                              <TableCell>{formatNumber(s['Respiratory rate'])}</TableCell>
+                              <TableCell>{formatNumber(s['Fragmentation'])}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -438,13 +264,7 @@ const SleepAnalysis: React.FC<SleepAnalysisProps> = ({ data, preview = false }) 
           )}
         </Grid>
       </Paper>
-
-      <ChartModal
-        open={openModal}
-        onClose={closeChartModal}
-        title={modalTitle}
-        chartComponent={modalChart}
-      />
+      <ChartModal open={openModal} onClose={closeChartModal} title={modalTitle} chartComponent={modalChart} />
     </>
   );
 };

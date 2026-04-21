@@ -39,12 +39,15 @@ export const transformHeartRateData = (data: Record<string, any>[]): any[] => {
   if (!data || data.length === 0) return [];
 
   const transformedData: any[] = [];
-  
-  // Get all dates from the first row (excluding the 'Time' column)
-  const dates = Object.keys(data[0]).filter(key => key !== 'Time' && key !== '');
-  
+
+  // Tolerate 'TIme' typo — find the time key case-insensitively
+  const timeKey = Object.keys(data[0]).find(k => k.toLowerCase() === 'time') ?? 'Time';
+
+  // Get all date columns (everything except the time key and blank keys)
+  const dates = Object.keys(data[0]).filter(key => key.toLowerCase() !== 'time' && key.trim() !== '');
+
   data.forEach(row => {
-    const timeValue = row.Time;
+    const timeValue = row[timeKey];
     if (timeValue === undefined || timeValue === null) return;
     
     // Handle both string and number time values
@@ -154,9 +157,9 @@ export const calculateIntensityScore = (workoutData: any[]): { score: number; la
   let count = 0;
   
   workoutData.forEach(workout => {
-    const zone3 = parseFloat(workout['Zone 3 %']?.replace('%', '') || '0');
-    const zone4 = parseFloat(workout['Zone 4 %']?.replace('%', '') || '0');
-    const zone5 = parseFloat(workout['Zone 5 %']?.replace('%', '') || '0');
+    const zone3 = parseFloat(String(workout['Zone 3 %'] ?? '0').replace('%', '') || '0');
+    const zone4 = parseFloat(String(workout['Zone 4 %'] ?? '0').replace('%', '') || '0');
+    const zone5 = parseFloat(String(workout['Zone 5 %'] ?? '0').replace('%', '') || '0');
     
     // Calculate intensity based on time in higher zones
     const intensity = (zone3 * 0.5) + (zone4 * 0.8) + (zone5 * 1.0);
@@ -174,7 +177,7 @@ export const calculateIntensityScore = (workoutData: any[]): { score: number; la
   return { score, label };
 };
 
-export const calculateRecoveryScore = (sleepData: any[], workoutData: any[]): { score: number; label: string } => {
+export const calculateRecoveryScore = (sleepData: any[], _workoutData: any[]): { score: number; label: string } => {
   if (sleepData.length === 0) return { score: 0, label: 'No data' };
   
   let totalRecovery = 0;
@@ -205,10 +208,11 @@ export const calculateRecoveryScore = (sleepData: any[], workoutData: any[]): { 
 };
 
 export const calculateConsistencyScore = (workoutData: any[]): { score: number; label: string } => {
-  if (workoutData.length < 2) return { score: 0, label: 'Insufficient data' };
-  
+  const validData = workoutData.filter(w => w.Date && typeof w.Date === 'string');
+  if (validData.length < 2) return { score: 0, label: 'Insufficient data' };
+
   // Extract dates and sort them
-  const dates = workoutData
+  const dates = validData
     .map(w => new Date(w.Date.split('/').reverse().join('-')))
     .sort((a, b) => a.getTime() - b.getTime());
   
@@ -262,13 +266,12 @@ export const calculateHRVTrends = (sleepData: any[]) => {
 export const calculateTrainingLoad = (workoutData: any[]) => {
   if (workoutData.length === 0) return [];
   
-  return workoutData.map(workout => {
+  return workoutData.filter(w => w.Duration && typeof w.Duration === 'string').map(workout => {
     const durationParts = workout.Duration.split(':').map(Number);
-    const durationHours = durationParts[0] + (durationParts[1] / 60) + (durationParts[2] / 3600);
-    
-    // Simple training load calculation: calories * duration * intensity factor
-    const intensity = parseFloat(workout['Zone 4 %']?.replace('%', '') || '0') / 100 || 0.5;
-    const load = workout.Calories * durationHours * (1 + intensity);
+    const durationHours = durationParts[0] + (durationParts[1] / 60) + ((durationParts[2] || 0) / 3600);
+
+    const intensity = parseFloat(String(workout['Zone 4 %'] ?? '0').replace('%', '') || '0') / 100 || 0.5;
+    const load = (workout.Calories || 0) * durationHours * (1 + intensity);
     
     return {
       date: workout.Date,

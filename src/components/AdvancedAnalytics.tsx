@@ -8,6 +8,7 @@ import {
   CardContent,
   IconButton,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import { Fullscreen } from '@mui/icons-material';
 import { Line, Doughnut } from 'react-chartjs-2';
@@ -22,6 +23,7 @@ import {
 } from '../utils/csvParser';
 import { formatNumber } from '../utils/formatters';
 import ChartModal from './ChartModal';
+import { mocha, getChartGrid, getChartText, getChartTooltipBg } from '../theme';
 
 interface AdvancedAnalyticsProps {
   workoutData: WorkoutData[];
@@ -32,158 +34,110 @@ interface AdvancedAnalyticsProps {
 const AdvancedAnalytics: React.FC<AdvancedAnalyticsProps> = ({
   workoutData,
   sleepData,
-  heartRateData,
+  heartRateData: _heartRateData,
 }) => {
+  const theme = useTheme();
+  const dark = theme.palette.mode === 'dark';
   const [openModal, setOpenModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalChart, setModalChart] = useState<React.ReactNode>(null);
 
-  if (workoutData.length === 0 && sleepData.length === 0 && heartRateData.length === 0) {
+  const openChartModal = useCallback((title: string, chart: React.ReactNode) => {
+    setModalTitle(title); setModalChart(chart); setOpenModal(true);
+  }, []);
+  const closeChartModal = useCallback(() => setOpenModal(false), []);
+
+  const gridColor = getChartGrid(dark);
+  const textColor = getChartText(dark);
+  const tooltipBg = getChartTooltipBg(dark);
+
+  if (workoutData.length === 0 && sleepData.length === 0) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+      <Paper sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
           Advanced Analytics
         </Typography>
-        <Typography color="textSecondary">
-          No data available for advanced analytics.
+        <Typography color="text.secondary" variant="body2">
+          Upload workout and sleep data to see advanced analytics.
         </Typography>
       </Paper>
     );
   }
 
-  // Calculate advanced metrics
   const trainingLoadData = calculateTrainingLoad(workoutData);
   const hrvTrends = calculateHRVTrends(sleepData);
   const intensityScore = calculateIntensityScore(workoutData);
   const recoveryScore = calculateRecoveryScore(sleepData, workoutData);
   const consistencyScore = calculateConsistencyScore(workoutData);
 
-  // Prepare data for charts
-// Update the trainingLoadChartData configuration
-const trainingLoadChartData = {
-  labels: trainingLoadData.map(item => item.date),
-  datasets: [
-    {
-      label: 'Training Load',
-      data: trainingLoadData.map(item => item.load),
-      fill: true,
-      backgroundColor: 'rgba(54, 162, 235, 0.1)',
-      borderColor: 'rgba(54, 162, 235, 1)',
-      borderWidth: 2,
-      pointBackgroundColor: 'rgba(54, 162, 235, 1)',
-      pointBorderColor: '#fff',
-      pointHoverBackgroundColor: '#fff',
-      pointHoverBorderColor: 'rgba(54, 162, 235, 1)',
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      tension: 0.4, // Smooth line
-    },
-  ],
-};
+  const loadColor = dark ? mocha.blue : '#3b82f6';
+  const tooltipBase = {
+    backgroundColor: tooltipBg,
+    titleColor: dark ? mocha.text : '#1e1b4b',
+    bodyColor: dark ? mocha.subtext0 : '#6b7280',
+    borderColor: dark ? mocha.surface1 : '#e5e7eb',
+    borderWidth: 1,
+  };
 
-// Update trainingLoadOptions for better appearance
-const trainingLoadOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
-        font: {
-          size: 14,
-        },
+  const trainingLoadChartData = {
+    labels: trainingLoadData.map(item => item.date),
+    datasets: [
+      {
+        label: 'Training Load',
+        data: trainingLoadData.map(item => item.load),
+        fill: true,
+        backgroundColor: `${loadColor}18`,
+        borderColor: loadColor,
+        borderWidth: 2,
+        pointBackgroundColor: loadColor,
+        pointBorderColor: dark ? mocha.surface0 : '#fff',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.4,
       },
-    },
-    title: {
-      display: true,
-      text: 'Training Load Over Time',
-      font: {
-        size: 16,
-        weight: 'bold',
-      },
-    },
-    tooltip: {
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      titleFont: {
-        size: 14,
-      },
-      bodyFont: {
-        size: 14,
-      },
-      padding: 10,
-      callbacks: {
-        label: function(context: any) {
-          return `Training Load: ${context.raw.toLocaleString()}`;
-        }
-      }
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      grid: {
-        color: 'rgba(0, 0, 0, 0.1)',
-      },
-      ticks: {
-        font: {
-          size: 12,
-        },
-      },
-      title: {
-        display: true,
-        text: 'Training Load',
-        font: {
-          size: 14,
-          weight: 'bold',
-        },
-      },
-    },
-    x: {
-      grid: {
-        color: 'rgba(0, 0, 0, 0.1)',
-      },
-      ticks: {
-        font: {
-          size: 12,
-        },
-        maxRotation: 45,
-      },
-      title: {
-        display: true,
-        text: 'Date',
-        font: {
-          size: 14,
-          weight: 'bold',
-        },
-      },
-    },
-  },
-};
+    ],
+  };
 
-  // Calculate workout intensity distribution
+  const trainingLoadOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top' as const, labels: { color: textColor, font: { size: 12 } } },
+      title: { display: false },
+      tooltip: { ...tooltipBase, callbacks: { label: (ctx: any) => `Load: ${(ctx.raw as number).toLocaleString()}` } },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: gridColor },
+        ticks: { color: textColor },
+        title: { display: true, text: 'Training Load', color: textColor },
+      },
+      x: {
+        grid: { color: gridColor },
+        ticks: { color: textColor, maxRotation: 45 },
+      },
+    },
+  };
+
+  const intensityColors = dark
+    ? [`${mocha.green}cc`, `${mocha.yellow}cc`, `${mocha.red}cc`]
+    : ['#10b98199', '#eab30899', '#ef444499'];
+
   const intensityDistribution = {
     labels: ['Low Intensity', 'Moderate Intensity', 'High Intensity'],
     datasets: [
       {
         data: [
-          workoutData.filter(w => {
-            const intensity = calculateIntensityScore([w]);
-            return intensity.label === 'Low';
-          }).length,
-          workoutData.filter(w => {
-            const intensity = calculateIntensityScore([w]);
-            return intensity.label === 'Moderate';
-          }).length,
-          workoutData.filter(w => {
-            const intensity = calculateIntensityScore([w]);
-            return intensity.label === 'High';
-          }).length,
+          workoutData.filter(w => calculateIntensityScore([w]).label === 'Low').length,
+          workoutData.filter(w => calculateIntensityScore([w]).label === 'Moderate').length,
+          workoutData.filter(w => calculateIntensityScore([w]).label === 'High').length,
         ],
-        backgroundColor: [
-          'rgba(255, 99, 132, 0.7)',
-          'rgba(255, 206, 86, 0.7)',
-          'rgba(75, 192, 192, 0.7)',
-        ],
+        backgroundColor: intensityColors,
+        borderColor: dark
+          ? [mocha.green, mocha.yellow, mocha.red]
+          : ['#10b981', '#eab308', '#ef4444'],
+        borderWidth: 1,
       },
     ],
   };
@@ -192,168 +146,139 @@ const trainingLoadOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        position: 'bottom' as const,
-      },
-      title: {
-        display: true,
-        text: 'Workout Intensity Distribution',
-      },
+      legend: { position: 'bottom' as const, labels: { color: textColor, font: { size: 12 } } },
+      title: { display: false },
       tooltip: {
+        ...tooltipBase,
         callbacks: {
-          label: function(context: any) {
-            const label = context.label || '';
-            const value = context.raw || 0;
-            const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-            const percentage = Math.round((value / total) * 100);
-            return `${label}: ${value} (${percentage}%)`;
-          }
-        }
-      }
+          label: (ctx: any) => {
+            const total = (ctx.dataset.data as number[]).reduce((a: number, b: number) => a + b, 0);
+            const pct = total > 0 ? Math.round(((ctx.raw as number) / total) * 100) : 0;
+            return `${ctx.label as string}: ${ctx.raw as number} (${pct}%)`;
+          },
+        },
+      },
     },
   };
 
-  // Function to open chart in modal
-  const openChartModal = useCallback((title: string, chart: React.ReactNode) => {
-    setModalTitle(title);
-    setModalChart(chart);
-    setOpenModal(true);
-  }, []);
+  const fullscreenBtnSx = {
+    position: 'absolute' as const,
+    top: 8,
+    right: 8,
+    bgcolor: dark ? 'rgba(49,50,68,0.85)' : 'rgba(255,255,255,0.85)',
+    backdropFilter: 'blur(4px)',
+    '&:hover': { bgcolor: dark ? mocha.surface1 : '#f3f4f6' },
+  };
 
-  // Function to close modal
-  const closeChartModal = useCallback(() => {
-    setOpenModal(false);
-  }, []);
-
-  // Create chart components with fullscreen buttons
-  const renderChartWithFullscreen = (
-    title: string, 
-    chart: React.ReactNode, 
-    chartComponent: React.ReactNode
-  ) => (
+  const renderWithFullscreen = (title: string, chart: React.ReactNode) => (
     <Box sx={{ position: 'relative', height: '100%' }}>
-      {chartComponent}
-      <Tooltip title="Open in full screen">
-        <IconButton
-          sx={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(255,255,255,0.7)' }}
-          onClick={() => openChartModal(title, chart)}
-          size="small"
-        >
+      {chart}
+      <Tooltip title="Fullscreen">
+        <IconButton sx={fullscreenBtnSx} onClick={() => openChartModal(title, chart)} size="small">
           <Fullscreen fontSize="small" />
         </IconButton>
       </Tooltip>
     </Box>
   );
 
-  // Create chart components for modal and regular view
-  const trainingLoadChart = (
-    <Line data={trainingLoadChartData} options={trainingLoadOptions} />
-  );
+  const trainingLoadChart = <Line data={trainingLoadChartData} options={trainingLoadOptions} />;
+  const intensityChart = <Doughnut data={intensityDistribution} options={intensityDistributionOptions} />;
 
-  const intensityDistributionChart = (
-    <Doughnut data={intensityDistribution} options={intensityDistributionOptions} />
-  );
+  const scoreCards = [
+    {
+      label: 'Intensity Score',
+      value: formatNumber(intensityScore.score),
+      sub: intensityScore.label,
+      color: dark ? mocha.yellow : '#eab308',
+    },
+    {
+      label: 'Recovery Score',
+      value: formatNumber(recoveryScore.score),
+      sub: recoveryScore.label,
+      color: dark ? mocha.green : '#10b981',
+    },
+    {
+      label: 'Consistency Score',
+      value: formatNumber(consistencyScore.score),
+      sub: consistencyScore.label,
+      color: dark ? mocha.sapphire : '#06b6d4',
+    },
+  ];
 
   return (
     <>
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" sx={{ fontWeight: 600 }} gutterBottom>
           Advanced Analytics
         </Typography>
 
-        <Grid container spacing={3}>
-          {/* Score Cards */}
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" color="primary">
-                  {formatNumber(intensityScore.score)}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Training Intensity Score
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {intensityScore.label}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+        <Grid container spacing={2.5}>
+          {scoreCards.map(card => (
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={card.label}>
+              <Card>
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography
+                    variant="h3"
+                    sx={{ fontWeight: 700, color: card.color, letterSpacing: '-0.04em' }}
+                  >
+                    {card.value}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {card.label}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: card.color }}>
+                    {card.sub}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
 
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" color="primary">
-                  {formatNumber(recoveryScore.score)}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Recovery Quality Score
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {recoveryScore.label}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h4" color="primary">
-                  {formatNumber(consistencyScore.score)}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  Consistency Score
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {consistencyScore.label}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Charts */}
           {trainingLoadData.length > 0 && (
-            <Grid item xs={12} md={8}>
+            <Grid size={{ xs: 12, md: 8 }}>
               <Card sx={{ height: 400 }}>
                 <CardContent>
-                  <Box sx={{ height: 350 }}>
-                    {renderChartWithFullscreen(
-                      'Training Load Over Time',
-                      trainingLoadChart,
-                      trainingLoadChart
-                    )}
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Training Load Over Time
+                  </Typography>
+                  <Box sx={{ height: 330 }}>
+                    {renderWithFullscreen('Training Load Over Time', trainingLoadChart)}
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
           )}
 
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card sx={{ height: 400 }}>
               <CardContent>
-                <Box sx={{ height: 350 }}>
-                  {renderChartWithFullscreen(
-                    'Workout Intensity Distribution',
-                    intensityDistributionChart,
-                    intensityDistributionChart
-                  )}
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  Workout Intensity Distribution
+                </Typography>
+                <Box sx={{ height: 330 }}>
+                  {renderWithFullscreen('Intensity Distribution', intensityChart)}
                 </Box>
               </CardContent>
             </Card>
           </Grid>
 
-          {/* Additional Stats */}
           {hrvTrends.avgHRV > 0 && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="h4" color="primary">
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography
+                    variant="h3"
+                    sx={{ fontWeight: 700, color: dark ? mocha.mauve : '#7c3aed', letterSpacing: '-0.04em' }}
+                  >
                     {formatNumber(hrvTrends.avgHRV)}
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
+                  <Typography variant="body2" color="text.secondary">
                     Average HRV
                   </Typography>
-                  <Typography variant="body2" color={hrvTrends.trend > 0 ? 'success.main' : 'error.main'}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: hrvTrends.trend > 0 ? (dark ? mocha.green : '#10b981') : (dark ? mocha.red : '#ef4444') }}
+                  >
                     Trend: {hrvTrends.trend > 0 ? '↑' : '↓'} {Math.abs(hrvTrends.trend).toFixed(2)}
                   </Typography>
                 </CardContent>
@@ -362,17 +287,20 @@ const trainingLoadOptions = {
           )}
 
           {workoutData.length > 0 && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="h4" color="primary">
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography
+                    variant="h3"
+                    sx={{ fontWeight: 700, color: dark ? mocha.blue : '#3b82f6', letterSpacing: '-0.04em' }}
+                  >
                     {workoutData.length}
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
+                  <Typography variant="body2" color="text.secondary">
                     Total Workouts
                   </Typography>
-                  <Typography variant="body2">
-                    {formatNumber(workoutData.reduce((sum, w) => sum + (w.Calories || 0), 0))} total calories
+                  <Typography variant="caption" color="text.secondary">
+                    {formatNumber(workoutData.reduce((s, w) => s + (w.Calories || 0), 0))} total calories
                   </Typography>
                 </CardContent>
               </Card>
@@ -380,16 +308,26 @@ const trainingLoadOptions = {
           )}
 
           {sleepData.length > 0 && (
-            <Grid item xs={12} sm={6} md={4}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
-                  <Typography variant="h4" color="primary">
-                    {formatNumber(sleepData.reduce((sum, s) => sum + (s['Total sleep time (min)'] || 0), 0) / sleepData.length / 60)}
+                <CardContent sx={{ textAlign: 'center', py: 3 }}>
+                  <Typography
+                    variant="h3"
+                    sx={{ fontWeight: 700, color: dark ? mocha.teal : '#0d9488', letterSpacing: '-0.04em' }}
+                  >
+                    {formatNumber(
+                      sleepData.reduce((s, sl) => s + (sl['Total sleep time (min)'] || 0), 0) /
+                        sleepData.length /
+                        60
+                    )}
+                    <Typography component="span" variant="h6" sx={{ ml: 0.5 }} color="text.secondary">
+                      hrs
+                    </Typography>
                   </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Avg Sleep Duration (hours)
+                  <Typography variant="body2" color="text.secondary">
+                    Avg Sleep Duration
                   </Typography>
-                  <Typography variant="body2">
+                  <Typography variant="caption" color="text.secondary">
                     {sleepData.length} nights recorded
                   </Typography>
                 </CardContent>
@@ -399,12 +337,7 @@ const trainingLoadOptions = {
         </Grid>
       </Paper>
 
-      <ChartModal
-        open={openModal}
-        onClose={closeChartModal}
-        title={modalTitle}
-        chartComponent={modalChart}
-      />
+      <ChartModal open={openModal} onClose={closeChartModal} title={modalTitle} chartComponent={modalChart} />
     </>
   );
 };

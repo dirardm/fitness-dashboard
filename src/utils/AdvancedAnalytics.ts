@@ -1,4 +1,4 @@
-import { WorkoutData, SleepData, TransformedHeartRateData } from '../types';
+import { WorkoutData, SleepData } from '../types';
 
 // Calculate training intensity score based on HR zones, calories, and duration
 export const calculateIntensityScore = (workoutData: WorkoutData[]): { score: number; label: string } => {
@@ -8,9 +8,9 @@ export const calculateIntensityScore = (workoutData: WorkoutData[]): { score: nu
   let count = 0;
   
   workoutData.forEach(workout => {
-    const zone3 = parseFloat(workout['Zone 3 %']?.replace('%', '') || '0');
-    const zone4 = parseFloat(workout['Zone 4 %']?.replace('%', '') || '0');
-    const zone5 = parseFloat(workout['Zone 5 %']?.replace('%', '') || '0');
+    const zone3 = parseFloat(String(workout['Zone 3 %'] ?? '0').replace('%', '') || '0');
+    const zone4 = parseFloat(String(workout['Zone 4 %'] ?? '0').replace('%', '') || '0');
+    const zone5 = parseFloat(String(workout['Zone 5 %'] ?? '0').replace('%', '') || '0');
     
     // Calculate intensity based on time in higher zones
     const intensity = (zone3 * 0.5) + (zone4 * 0.8) + (zone5 * 1.0);
@@ -29,7 +29,7 @@ export const calculateIntensityScore = (workoutData: WorkoutData[]): { score: nu
 };
 
 // Calculate recovery score based on sleep quality and workout intensity
-export const calculateRecoveryScore = (sleepData: SleepData[], workoutData: WorkoutData[]): { score: number; label: string } => {
+export const calculateRecoveryScore = (sleepData: SleepData[], _workoutData: WorkoutData[]): { score: number; label: string } => {
   if (sleepData.length === 0) return { score: 0, label: 'No data' };
   
   let totalRecovery = 0;
@@ -61,10 +61,10 @@ export const calculateRecoveryScore = (sleepData: SleepData[], workoutData: Work
 
 // Calculate consistency score based on workout frequency and regularity
 export const calculateConsistencyScore = (workoutData: WorkoutData[]): { score: number; label: string } => {
-  if (workoutData.length < 2) return { score: 0, label: 'Insufficient data' };
-  
-  // Extract dates and sort them
-  const dates = workoutData
+  const validData = workoutData.filter(w => w.Date && typeof w.Date === 'string');
+  if (validData.length < 2) return { score: 0, label: 'Insufficient data' };
+
+  const dates = validData
     .map(w => new Date(w.Date.split('/').reverse().join('-')))
     .sort((a, b) => a.getTime() - b.getTime());
   
@@ -120,13 +120,12 @@ export const calculateHRVTrends = (sleepData: SleepData[]) => {
 export const calculateTrainingLoad = (workoutData: WorkoutData[]) => {
   if (workoutData.length === 0) return [];
   
-  return workoutData.map(workout => {
+  return workoutData.filter(w => w.Duration && typeof w.Duration === 'string').map(workout => {
     const durationParts = workout.Duration.split(':').map(Number);
-    const durationHours = durationParts[0] + (durationParts[1] / 60) + (durationParts[2] / 3600);
-    
-    // Simple training load calculation: calories * duration * intensity factor
-    const intensity = parseFloat(workout['Zone 4 %']?.replace('%', '') || '0') / 100 || 0.5;
-    const load = workout.Calories * durationHours * (1 + intensity);
+    const durationHours = durationParts[0] + (durationParts[1] / 60) + ((durationParts[2] || 0) / 3600);
+
+    const intensity = parseFloat(String(workout['Zone 4 %'] ?? '0').replace('%', '') || '0') / 100 || 0.5;
+    const load = (workout.Calories || 0) * durationHours * (1 + intensity);
     
     return {
       date: workout.Date,
