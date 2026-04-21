@@ -174,7 +174,7 @@ Missing cells (no data for a given time slot on a given date) are handled gracef
 
 ## Screenshots
 
-[![Watch the demo video](thumbnail.png)](Fitness-Analytics.mp4)
+![App Demo](demo.gif)
 
 > _Add screenshots here once the app is running. The sections below show suggested captions._
 
