@@ -200,6 +200,90 @@ https://github.com/user-attachments/assets/b4daab59-1faf-4fa9-bb9d-c3990c949bdd
 
 The "Data stays local — never uploaded" notice in the sidebar is accurate by design, not just policy.
 
+## Project Structure
+
+```
+fitness-dashboard/
+├── index.html                      # Vite HTML entry point
+├── vite.config.ts                  # Vite build configuration
+├── tsconfig.json                   # Base TypeScript config
+├── tsconfig.app.json               # App-specific TS config (src/)
+├── tsconfig.node.json              # Node/tooling TS config (vite.config.ts)
+├── eslint.config.js                # ESLint flat config
+├── package.json
+├── public/
+│   └── vite.svg
+└── src/
+    ├── main.tsx                    # App entry point
+    ├── App.tsx                     # Root component; lifts darkMode and data-array state
+    ├── App.css                     # App-level styles
+    ├── index.css                   # Global styles
+    ├── theme.ts                    # MUI v9 theme definitions (light + dark variants)
+    ├── vite-env.d.ts               # Vite client type declarations
+    │
+    ├── pages/                      # Top-level route pages
+    │   ├── DashboardPage.tsx
+    │   ├── WorkoutsPage.tsx
+    │   ├── SleepPage.tsx
+    │   └── HeartRatePage.tsx
+    │
+    ├── components/                 # Feature and shared UI components
+    │   ├── layout/                 # Shell: sidebar, nav, dark-mode toggle
+    │   ├── FileUpload.tsx          # CSV file ingestion UI
+    │   ├── DateRangePicker.tsx     # Preset + custom date-range controls
+    │   ├── SummaryView.tsx         # Top-of-dashboard summary cards
+    │   ├── WeeklyTrends.tsx        # Sparkline stat cards with week-over-week deltas
+    │   ├── CorrelationHeatmap.tsx  # Pearson r matrix across six metrics
+    │   ├── WorkoutAnalysis.tsx     # Full workout charts and tables
+    │   ├── SleepAnalysis.tsx       # Full sleep charts and tables
+    │   ├── HeartRateAnalysis.tsx   # Per-session HR trace
+    │   ├── AdvancedAnalytics.tsx   # Composite scores and training load
+    │   ├── PersonalRecords.tsx     # PR cards (max calories, distance, etc.)
+    │   ├── ACWRChart.tsx           # Acute:Chronic Workload Ratio chart
+    │   ├── ChartModal.tsx          # Fullscreen chart expansion (shared)
+    │   └── ErrorBoundary.tsx       # React error boundary wrapper
+    │
+    ├── context/
+    │   └── DataContext.tsx         # React context for parsed data
+    │
+    ├── hooks/
+    │   └── useLocalStorage.ts      # Typed localStorage hook (persists date range)
+    │
+    ├── utils/
+    │   ├── csvParser.ts            # CSV parsing, validation, and data transformation
+    │   ├── AdvancedAnalytics.ts    # Composite metrics: correlation, training load, scores
+    │   ├── analytics.ts            # Supporting analytics helpers
+    │   ├── chartSetup.ts           # Global Chart.js component registration
+    │   ├── chartConfig.ts          # Shared Chart.js default options
+    │   └── formatters.ts           # Display formatting utilities (dates, numbers, durations)
+    │
+    └── types/
+        └── index.ts                # Single source of truth for all TypeScript interfaces
+```
+
+---
+
+## Theming
+
+The app ships with a custom **Catppuccin Mocha**-inspired dark palette applied via MUI v9 theming (`src/theme.ts`). A light/dark toggle in the sidebar switches between the two variants at runtime; the preference is not persisted across sessions by default.
+
+### Catppuccin Mocha palette
+
+| Role           | Token      | Hex       |
+| -------------- | ---------- | --------- |
+| Background     | Base       | `#1e1e2e` |
+| Surface        | Surface 0  | `#313244` |
+| Text           | Text       | `#cdd6f4` |
+| Purple accent  | Mauve      | `#cba6f7` |
+| Pink / error   | Red        | `#f38ba8` |
+| Green / success| Green      | `#a6e3a1` |
+| Yellow / warn  | Yellow     | `#f9e2af` |
+| Blue / info    | Blue       | `#89b4fa` |
+
+These colours are mapped to MUI theme tokens (`palette.primary`, `palette.error`, `palette.success`, etc.) so all MUI components inherit them automatically without per-component overrides.
+
+---
+
 ## ⚠️ Disclaimer
 
 **Use this application at your own risk.** The authors and contributors are not responsible for any injuries, health issues, data loss, or damages arising from the use of this software. Always consult a qualified professional before making health or fitness decisions based on this app's output.
