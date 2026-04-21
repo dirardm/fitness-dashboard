@@ -199,3 +199,7 @@ https://github.com/user-attachments/assets/b4daab59-1faf-4fa9-bb9d-c3990c949bdd
 - Clearing browser storage or opening the app in a private/incognito window leaves no trace of your fitness data.
 
 The "Data stays local — never uploaded" notice in the sidebar is accurate by design, not just policy.
+
+## ⚠️ Disclaimer
+
+**Use this application at your own risk.** The authors and contributors are not responsible for any injuries, health issues, data loss, or damages arising from the use of this software. Always consult a qualified professional before making health or fitness decisions based on this app's output.
