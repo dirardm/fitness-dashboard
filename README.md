@@ -173,7 +173,7 @@ Missing cells (no data for a given time slot on a given date) are handled gracef
 ---
 
 ## Screenshots
-
+A screencast that showcases the functionalalities and features of the Fitness-Dashboard:
 https://github.com/user-attachments/assets/b4daab59-1faf-4fa9-bb9d-c3990c949bdd
 
 
