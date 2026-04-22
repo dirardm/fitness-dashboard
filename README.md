@@ -176,7 +176,7 @@ Missing cells (no data for a given time slot on a given date) are handled gracef
 https://github.com/user-attachments/assets/b4daab59-1faf-4fa9-bb9d-c3990c949bdd
 
 
-A screencast that showcases the functionalalities and features of the Fitness-Dashboard:
+The above screencast showcases the functionalalities and features of the Fitness-Dashboard
 
 > Coming soon: screenshots will be added here. The sections below show suggested captions.\_
 
